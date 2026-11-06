@@ -1,0 +1,921 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>IoT + Google Planilhas</title>
+<meta name="description" content="Guia: ESP32 no Wokwi enviando dados para uma planilha do Google com Apps Script, com resumo, gráfico, controle de LED e alerta por e-mail.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📊</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --canvas:#E9EDF0;
+  --paper:#FFFFFF;
+  --ink:#1E2B36;
+  --muted:#53616C;
+  --line:#C9D1D7;
+  --red:#A3171F;
+  --red-dark:#7D1017;
+  --ps:#012456;
+  --ps-text:#EEF2F7;
+  --inject:#A6BBCF;
+  --function:#FDD0A2;
+  --switch:#E2D96E;
+  --debug:#87A980;
+  --dash:#9DD5E8;
+  --ok:#3E8E41;
+  --sans:"Atkinson Hyperlegible", "Segoe UI", system-ui, -apple-system, Arial, sans-serif;
+  --mono:"IBM Plex Mono", Consolas, "Courier New", monospace;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:70px}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+body{
+  margin:0;font-family:var(--sans);font-size:18px;line-height:1.6;color:var(--ink);
+  background-color:var(--canvas);
+  background-image:
+    linear-gradient(to right, rgba(30,43,54,.06) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(30,43,54,.06) 1px, transparent 1px);
+  background-size:20px 20px;
+}
+a{color:var(--red)}
+a:focus-visible,button:focus-visible,input:focus-visible,summary:focus-visible{outline:3px solid #1A73E8;outline-offset:2px}
+
+/* Barra superior */
+.topbar{
+  position:sticky;top:0;z-index:10;background:#8F0000;color:#fff;
+  display:flex;align-items:center;gap:16px;padding:10px 20px;
+}
+.topbar strong{font-size:17px}
+.progress{margin-left:auto;display:flex;align-items:center;gap:10px;font-size:15px}
+.meter{width:120px;height:8px;background:rgba(255,255,255,.25);border-radius:4px;overflow:hidden}
+.meter span{display:block;height:100%;width:0;background:#fff;transition:width .3s}
+
+/* Abertura */
+header.hero{max-width:1100px;margin:0 auto;padding:56px 20px 24px}
+.hero h1{font-size:clamp(40px,7vw,72px);line-height:1.02;margin:0 0 12px;letter-spacing:-.02em}
+.hero p.lead{font-size:21px;max-width:44ch;margin:0 0 32px;color:var(--muted)}
+.flow-nav{background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:12px;overflow-x:auto}
+.flow-nav svg{display:block;min-width:880px;width:100%;height:auto}
+.flow-nav .hint{font-size:15px;color:var(--muted);margin:6px 4px 0}
+.fn-node{cursor:pointer}
+.fn-node rect.body{stroke:#999;stroke-width:1}
+.fn-node:hover rect.body,.fn-node:focus rect.body{stroke:var(--red);stroke-width:2}
+.fn-node text{font-family:var(--sans);font-size:14px;fill:#333}
+.fn-status{opacity:0;transition:opacity .3s}
+.fn-status.on{opacity:1}
+
+/* Conteúdo */
+main{max-width:820px;margin:0 auto;padding:0 20px 80px}
+section.part{
+  background:var(--paper);border:1px solid var(--line);border-radius:8px;
+  padding:36px clamp(20px,5vw,48px);margin-top:36px;
+}
+.part-tag{display:inline-flex;align-items:center;gap:8px;font-size:15px;font-weight:700;color:var(--muted);margin-bottom:6px}
+.part-tag i{width:14px;height:14px;border-radius:3px;border:1px solid #999;display:inline-block}
+h2{font-size:clamp(30px,4.5vw,40px);line-height:1.1;margin:0 0 16px;letter-spacing:-.01em}
+h3{font-size:24px;line-height:1.25;margin:36px 0 10px}
+p,li{max-width:68ch}
+code{font-family:var(--mono);font-size:.88em;background:#EEF1F3;border:1px solid #DCE2E6;border-radius:4px;padding:1px 5px}
+kbd{font-family:var(--sans);font-size:.85em;border:1px solid #B8C1C8;border-bottom-width:3px;border-radius:5px;padding:0 6px;background:#fff;white-space:nowrap}
+
+/* Glossário */
+dl.terms{display:grid;grid-template-columns:auto 1fr;gap:10px 18px;margin:20px 0}
+dl.terms dt{font-weight:700}
+dl.terms dd{margin:0}
+@media (max-width:560px){dl.terms{grid-template-columns:1fr}dl.terms dd{margin-bottom:8px}}
+
+/* Passos numerados */
+ol.steps{list-style:none;counter-reset:s;padding:0;margin:24px 0}
+ol.steps>li{counter-increment:s;position:relative;padding:0 0 28px 56px;border-left:2px solid var(--line);margin-left:18px}
+ol.steps>li:last-child{border-left-color:transparent;padding-bottom:0}
+ol.steps>li::before{
+  content:counter(s);position:absolute;left:-19px;top:-4px;width:36px;height:36px;border-radius:50%;
+  background:var(--red);color:#fff;font-weight:700;display:grid;place-items:center;font-size:17px;
+}
+ol.steps>li>h4{font-size:20px;margin:0 0 6px;line-height:1.3}
+ol.steps>li>h4+p{margin-top:0}
+
+/* Terminal PowerShell */
+.ps{background:var(--ps);color:var(--ps-text);border-radius:6px;margin:12px 0;position:relative;font-family:var(--mono);font-size:15px}
+.ps .bar{display:flex;align-items:center;justify-content:space-between;padding:6px 8px 6px 14px;border-bottom:1px solid rgba(255,255,255,.12);font-family:var(--sans);font-size:13px;color:#A9B8CC}
+.ps pre{margin:0;padding:14px 16px;overflow-x:auto;white-space:pre}
+.ps .prompt{color:#7FA6D6;user-select:none}
+.ps.output pre{color:#C9D6E6}
+.copy{
+  font-family:var(--sans);font-size:14px;font-weight:700;border:0;border-radius:4px;cursor:pointer;
+  background:#fff;color:var(--ps);padding:5px 12px;
+}
+.copy.done{background:#7CD992}
+
+/* Caixas de aviso */
+.note{border-left:5px solid;border-radius:0 6px 6px 0;padding:12px 16px;margin:16px 0;background:#F6F8F9}
+.note p{margin:4px 0}
+.note.tip{border-color:#2F7DBF;background:#EEF5FB}
+.note.warn{border-color:#C98A00;background:#FDF6E3}
+.note.ok{border-color:var(--ok);background:#EEF7EE}
+.note b.k{display:block}
+
+/* Mini-fluxos das atividades */
+.flow{display:flex;align-items:center;flex-wrap:nowrap;overflow-x:auto;padding:16px 4px;margin:8px 0 16px}
+.fnode{
+  flex:none;display:inline-flex;align-items:center;gap:8px;border:1px solid #999;border-radius:5px;
+  padding:7px 12px 7px 0;font-size:15px;white-space:nowrap;position:relative
+}
+.fnode::before{content:"";width:22px;align-self:stretch;margin:-7px 0;background:rgba(0,0,0,.07);border-right:1px solid rgba(0,0,0,.12);border-radius:5px 0 0 5px}
+.fnode.split{flex-direction:column;align-items:flex-start;gap:0}
+.wire{flex:none;width:34px;height:2px;background:#888}
+.branch{display:flex;flex-direction:column;gap:10px}
+.branch .row{display:flex;align-items:center}
+.c-inject{background:var(--inject)}.c-function{background:var(--function)}.c-switch{background:var(--switch)}
+.c-debug{background:var(--debug)}.c-dash{background:var(--dash)}
+
+/* Editor de exemplo */
+.editor-mock{border:2px solid #7C8891;border-radius:6px;overflow:hidden;font-size:14px;margin:20px 0;background:#fff}
+.em-top{background:#8F0000;color:#fff;display:flex;align-items:center;gap:10px;padding:8px 10px}
+.em-top .deploy{margin-left:auto;background:#AD1625;border:1px solid #fff;border-radius:3px;padding:2px 10px}
+.em-body{display:grid;grid-template-columns:1fr 2.4fr 1.3fr;min-height:200px}
+.em-body>div{padding:10px;position:relative}
+.em-pal{background:#F3F3F3;border-right:1px solid #ccc}
+.em-pal span{display:block;margin:6px 0;padding:3px 6px;border:1px solid #999;border-radius:4px;font-size:13px}
+.em-work{background-image:linear-gradient(to right,#eee 1px,transparent 1px),linear-gradient(#eee 1px,transparent 1px);background-size:16px 16px}
+.em-side{background:#F3F3F3;border-left:1px solid #ccc}
+.badge{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:50%;background:#1A73E8;color:#fff;font-weight:700;font-size:13px;flex:none}
+.em-body .badge{position:absolute;top:8px;right:8px}
+.legend{list-style:none;padding:0}
+.legend li{display:flex;gap:12px;align-items:flex-start;margin:10px 0}
+
+/* Código de fluxo para importar */
+details.json{margin:12px 0;border:1px solid var(--line);border-radius:6px;background:#F8FAFB}
+details.json summary{cursor:pointer;padding:10px 14px;font-weight:700}
+details.json pre{margin:0;padding:14px;max-height:280px;overflow:auto;font-family:var(--mono);font-size:13px;white-space:pre-wrap;word-break:break-all;border-top:1px solid var(--line)}
+details.json .actions{padding:10px 14px;border-top:1px solid var(--line)}
+details.json .copy{background:var(--ps);color:#fff}
+
+/* Problemas */
+details.fix{border-bottom:1px solid var(--line);padding:12px 0}
+details.fix summary{cursor:pointer;font-weight:700}
+details.fix p{margin:8px 0 0}
+
+/* Concluí */
+label.done{
+  display:flex;align-items:center;gap:12px;margin-top:32px;padding:14px 16px;border:2px dashed var(--line);
+  border-radius:8px;cursor:pointer;font-weight:700
+}
+label.done input{width:22px;height:22px;accent-color:var(--ok)}
+label.done:has(input:checked){border-style:solid;border-color:var(--ok);background:#EEF7EE}
+
+.challenge{border:2px solid var(--ink);border-radius:8px;padding:16px 20px;margin-top:24px}
+.challenge h4{margin:0 0 6px;font-size:19px}
+
+ol.questions{padding-left:28px;margin:16px 0}
+ol.questions li{margin:0 0 14px;padding-left:6px}
+ol.questions li::marker{font-weight:700;color:var(--red)}
+.copy-dark{background:var(--ps);color:#fff;padding:8px 14px;font-size:15px}
+.muted{color:var(--muted);font-size:15px}
+ul.checklist{list-style:none;padding:0;margin:8px 0 0}
+ul.checklist li{padding-left:30px;position:relative;margin:6px 0}
+ul.checklist li::before{content:"";position:absolute;left:0;top:4px;width:18px;height:18px;border:2px solid var(--ink);border-radius:3px}
+
+footer{text-align:center;color:var(--muted);font-size:15px;padding:0 20px 40px}
+
+@media (max-width:640px){
+  body{font-size:17px}
+  .em-body{grid-template-columns:1fr}
+  .em-pal,.em-side{border:0;border-bottom:1px solid #ccc}
+  .meter{width:70px}
+  .topbar strong{font-size:15px}
+}
+@media print{
+  .topbar,.flow-nav,label.done,.copy{display:none}
+  body{background:#fff}
+  section.part{border:0;padding:0}
+}
+
+.pill{display:inline-block;font-size:14px;font-weight:700;border-radius:999px;padding:2px 12px;margin-left:8px;vertical-align:middle}
+.pill.pronto{background:#E3EEF7;color:#1F5C8F}
+.pill.voce{background:#FDEBD3;color:#8A4B00}
+table.regras{border-collapse:collapse;margin:12px 0;width:100%;max-width:560px}
+table.regras th,table.regras td{border:1px solid var(--line);padding:8px 12px;text-align:left}
+table.regras th{background:#F3F5F7}
+.c-mqtt{background:#D8BFD8}.c-http{background:#E7E7AE}
+
+.grupo-box{background:#1E2B36;color:#fff;border-radius:8px;padding:18px 20px;margin:20px 0}
+.grupo-box label{font-weight:700;display:block;margin-bottom:8px}
+.grupo-box input{font-family:var(--mono);font-size:18px;padding:8px 12px;border-radius:6px;border:2px solid #7FA6D6;width:100%;max-width:360px}
+.grupo-box small{display:block;margin-top:8px;color:#C9D6E6}
+.g{font-family:var(--mono);background:#FFF3C4;padding:0 4px;border-radius:3px}
+table.tab{border-collapse:collapse;margin:12px 0;width:100%;font-size:16px}
+table.tab th,table.tab td{border:1px solid var(--line);padding:7px 10px;text-align:left;vertical-align:top}
+table.tab th{background:#F3F5F7}
+.wrap{overflow-x:auto}
+.c-wokwi{background:#C8E6C9}.c-broker{background:#D8BFD8}.c-nr{background:#9DD5E8}
+.rubrica{display:inline-block;background:#2E7D32;color:#fff;font-size:13px;font-weight:700;border-radius:4px;padding:1px 8px;margin-left:6px;vertical-align:middle}
+
+/* --- layout mais largo, sem rolagem lateral --- */
+main{max-width:1120px}
+p,li{max-width:none}
+section.part{padding:36px clamp(16px,4vw,40px)}
+.wrap{overflow-x:visible}
+table.tab,table.regras{table-layout:auto;width:100%}
+table.tab td,table.tab th,table.regras td,table.regras th{word-break:normal;overflow-wrap:anywhere}
+table code,dl code,li code,p code{white-space:normal;overflow-wrap:anywhere}
+.ps pre,details.json pre{white-space:pre-wrap;overflow-wrap:anywhere;overflow-x:hidden}
+.flow{flex-wrap:wrap;row-gap:10px;overflow-x:visible}
+
+.hv{border:2px solid #7C8891;border-radius:6px;background:#f2f2f2;font-size:14px;margin:16px 0;padding:0 0 10px;font-family:Arial,sans-serif}
+.hv-top{background:#fff;border-bottom:2px solid #333;padding:8px 12px;font-weight:700;letter-spacing:.08em;display:flex;justify-content:space-between}
+.hv-top span{font-weight:400;letter-spacing:0;font-size:13px}
+.hv-box{background:#e4e4e4;margin:10px 10px 0;padding:10px;border-radius:3px;position:relative}
+.hv-box small{color:#666;font-size:12px}
+.hv-box .badge{position:absolute;top:8px;right:8px}
+.hv-dot{display:inline-block;width:11px;height:11px;border-radius:50%;background:#c62828;vertical-align:middle;margin-left:6px}
+.hv-row{display:flex;gap:8px;margin-top:8px;align-items:flex-end;flex-wrap:wrap}
+.hv-f{flex:1;min-width:90px;color:#555;font-size:12px}
+.hv-f em{display:block;font-style:normal;background:#fff;border:1px solid #bbb;padding:4px 6px;color:#222;font-size:13px;margin-top:2px}
+.hv-btn{background:#2a9fd6;color:#fff;padding:5px 10px;font-size:13px;border-radius:2px}
+.hv-grid{display:grid;grid-template-columns:1.6fr 1fr}
+@media (max-width:640px){.hv-grid{grid-template-columns:1fr}}
+
+.nr-final{background:#F8FAFB;border:1px solid var(--line);border-radius:8px;padding:14px 16px;margin:12px 0}
+.nr-row{display:flex;align-items:center;flex-wrap:wrap;row-gap:8px;margin:6px 0}
+.nr-cap{font-size:15px;color:var(--muted);margin:2px 0 14px;font-style:italic}
+table.cfg{max-width:640px}
+table.cfg th[colspan]{background:#1E2B36;color:#fff}
+table.cfg td:first-child{font-weight:700;width:34%}
+
+.pill{display:inline-block;font-size:14px;font-weight:700;border-radius:999px;padding:2px 12px;margin-left:8px;vertical-align:middle}
+.pill.pronto{background:#E3EEF7;color:#1F5C8F}
+.pill.voce{background:#FDEBD3;color:#8A4B00}
+ol.questions{padding-left:28px;margin:16px 0}
+ol.questions li{margin:0 0 14px;padding-left:6px}
+ol.questions li::marker{font-weight:700;color:var(--red)}
+.copy-dark{background:var(--ps);color:#fff;padding:8px 14px;font-size:15px}
+.muted{color:var(--muted);font-size:15px}
+.c-db{background:#F4C7A1}
+.vsc{border:2px solid #7C8891;border-radius:6px;overflow:hidden;font-size:14px;margin:16px 0;background:#1f1f1f;color:#ddd;font-family:Segoe UI,Arial,sans-serif}
+.vsc-top{background:#2c2c2c;padding:6px 10px;font-size:13px;color:#ccc}
+.vsc-body{display:grid;grid-template-columns:200px 1fr}
+.vsc-exp{background:#252526;padding:10px;position:relative}
+.vsc-exp div{padding:2px 6px}
+.vsc-ed{padding:10px 14px;position:relative;font-family:var(--mono);font-size:13px;color:#9cdcfe;min-height:120px}
+.vsc-term{grid-column:1 / -1;background:#181818;border-top:1px solid #444;padding:8px 12px;font-family:var(--mono);font-size:13px;position:relative}
+.vsc .badge{position:absolute;top:6px;right:6px}
+@media (max-width:640px){.vsc-body{grid-template-columns:1fr}}
+
+.gs-mock{border:2px solid #7C8891;border-radius:6px;overflow:hidden;font-size:14px;margin:16px 0;background:#fff;font-family:Arial,sans-serif}
+.gs-top{background:#f1f3f4;padding:8px 12px;display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+.gs-top b{color:#188038}
+.gs-grid{display:grid;grid-template-columns:40px repeat(3,1fr);font-size:13px}
+.gs-grid div{border-right:1px solid #e0e0e0;border-bottom:1px solid #e0e0e0;padding:4px 8px;min-height:24px}
+.gs-h{background:#f8f9fa;color:#5f6368;text-align:center}
+.gs-tabs{background:#f1f3f4;padding:6px 12px;font-size:13px;display:flex;gap:8px}
+.gs-tabs span{background:#fff;padding:2px 10px;border-radius:4px 4px 0 0;border:1px solid #ddd}
+.gs-tabs span.on{color:#188038;font-weight:700}
+.vs{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:12px 0}
+.vs>div{border:1px solid var(--line);border-radius:8px;padding:12px 14px;background:#F8FAFB}
+.vs h5{margin:0 0 6px;font-size:16px}
+@media (max-width:640px){.vs{grid-template-columns:1fr}}
+.c-gs{background:#B7E1CD}
+
+details.entenda{margin:14px 0;border:1px solid #BFD3E6;border-radius:8px;background:#F4F8FC}
+details.entenda summary{cursor:pointer;padding:10px 14px;font-weight:700;color:#1F5C8F}
+details.entenda[open] summary{border-bottom:1px solid #BFD3E6}
+details.entenda .wrap{padding:10px 12px}
+details.entenda table{background:#fff}
+details.entenda td:first-child{width:42%}
+.copy{white-space:nowrap}
+</style>
+</head>
+<body>
+<div class="topbar" role="banner">
+  <strong>IoT + Google Planilhas</strong>
+  <div class="progress" aria-live="polite"><span id="progText">0 de 8 etapas</span><div class="meter" aria-hidden="true"><span id="progBar"></span></div></div>
+</div>
+
+<header class="hero">
+  <h1>IoT + Google Planilhas</h1>
+  <p class="lead">Um ESP32 no Wokwi manda leituras direto para uma planilha do Google, sem servidor nem banco de dados. Depois a planilha ganha resumo, gráfico e até controla um LED.</p>
+  <div class="flow-nav">
+    <svg id="flowSvg" viewBox="0 0 1390 190" role="navigation" aria-label="Etapas da aula"></svg>
+    <p class="hint">Roteiro da aula. As etapas 1 a 3 são a atividade principal; as marcadas com <b>+</b> são complementos, um mais avançado que o outro.</p>
+  </div>
+</header>
+<main>
+
+<section class="part" id="visao">
+  <div class="part-tag"><i style="background:var(--inject)"></i>Etapa 0</div>
+  <h2>Visão geral: como o dado chega na planilha</h2>
+  <p>Até agora usamos MQTT, em que um broker entrega as mensagens. Hoje o ESP32 vai falar <b>direto</b> com o Google, do mesmo jeito que o navegador abre um site: por <b>HTTP</b>.</p>
+  <div class="flow" aria-label="Caminho do dado">
+    <span class="fnode" style="background:#C8E6C9">ESP32 no Wokwi</span><span class="wire"></span>
+    <span class="fnode c-function">HTTP POST (JSON)</span><span class="wire"></span>
+    <span class="fnode c-gs">Apps Script (Web App)</span><span class="wire"></span>
+    <span class="fnode c-gs">Planilha</span>
+  </div>
+  <dl class="terms">
+    <dt>Google Planilhas</dt><dd>A planilha online do Google. É nela que as leituras vão aparecer, uma por linha.</dd>
+    <dt>Apps Script</dt><dd>Um lugar para escrever pequenos programas (em JavaScript) que mexem na planilha.</dd>
+    <dt>Web App</dt><dd>Quando o Apps Script é “publicado”, ele ganha um <b>endereço na internet</b> (URL). Quem acessa esse endereço faz o script rodar.</dd>
+    <dt>doPost</dt><dd>A função que roda quando alguém <b>envia</b> dados para a URL (pedido do tipo POST). Ela grava uma linha nova.</dd>
+    <dt>doGet</dt><dd>A função que roda quando alguém <b>pede</b> algo para a URL (pedido do tipo GET). Vamos usar no complemento de controle.</dd>
+    <dt>JSON</dt><dd>O formato da mensagem: <code>{"sensor": "Temperatura", "valor": 25.3}</code>.</dd>
+  </dl>
+  <h3>MQTT ou HTTP direto?</h3>
+  <div class="vs">
+    <div><h5>MQTT (aulas anteriores)</h5><p>Precisa de broker. A mensagem chega na hora, e vários sistemas podem ouvir ao mesmo tempo. Bom para controle em tempo real.</p></div>
+    <div><h5>HTTP para a planilha (hoje)</h5><p>Não precisa de broker nem servidor. Cada envio leva 1 a 3 segundos e vira uma linha guardada para sempre. Bom para <b>registro e relatório</b>.</p></div>
+  </div>
+  <h3>O que você vai precisar</h3>
+  <ul>
+    <li>Uma <b>conta Google pessoal</b> (Gmail). Contas da instituição costumam bloquear a opção “Qualquer pessoa” da publicação.</li>
+    <li>Uma conta no <a href="https://wokwi.com" target="_blank" rel="noopener">Wokwi</a> (pode entrar com a mesma conta Google).</li>
+  </ul>
+  <label class="done"><input type="checkbox" data-step="visao"> Concluí esta etapa</label>
+</section>
+
+<section class="part" id="planilha">
+  <div class="part-tag"><i style="background:#C8E6C9"></i>Etapa 1</div>
+  <h2>Criando a planilha</h2>
+  <ol class="steps">
+    <li><h4>Abra o Google Planilhas</h4><p>Acesse <a href="https://sheets.google.com" target="_blank" rel="noopener">sheets.google.com</a> e entre com sua conta Google pessoal.</p></li>
+    <li><h4>Crie uma planilha em branco</h4><p>Clique em <b>Em branco</b> (o quadro com o <b>+</b> colorido).</p></li>
+    <li><h4>Dê o nome</h4><p>Clique em <b>Planilha sem título</b>, no canto superior esquerdo, apague e escreva <code>aula_iot_planilha</code>. Aperte <kbd>Enter</kbd>.</p></li>
+    <li><h4>Escreva o cabeçalho</h4><p>Na linha 1, escreva os títulos das colunas: <b>A1</b> <code>Data/Hora</code>, <b>B1</b> <code>Sensor</code>, <b>C1</b> <code>Valor</code>. As leituras vão entrar a partir da linha 2.</p><p>Dica: para a data e hora aparecerem inteiras, dê <b>duplo clique</b> na divisa entre as letras <b>A</b> e <b>B</b>, no alto: a coluna se ajusta sozinha.</p></li>
+    <li><h4>Renomeie a aba</h4><p>Lá embaixo, clique com o botão direito na aba <b>Página1</b> → <b>Renomear</b> → escreva <code>Dados</code>. Isso vai ser útil nos complementos.</p></li>
+  </ol>
+  <div class="gs-mock" aria-hidden="true"><div class="gs-top"><b>▦</b> aula_iot_planilha</div><div class="gs-grid"><div class="gs-h"></div><div class="gs-h">A</div><div class="gs-h">B</div><div class="gs-h">C</div><div class="gs-h">1</div><div><b>Data/Hora</b></div><div><b>Sensor</b></div><div><b>Valor</b></div><div class="gs-h">2</div><div></div><div></div><div></div><div class="gs-h">3</div><div></div><div></div><div></div></div><div class="gs-tabs"><span class="on">Dados</span></div></div>
+  <label class="done"><input type="checkbox" data-step="planilha"> Concluí esta etapa</label>
+</section>
+
+<section class="part" id="script">
+  <div class="part-tag"><i style="background:var(--function)"></i>Etapa 2</div>
+  <h2>O Apps Script: a “porta de entrada” da planilha</h2>
+  <ol class="steps">
+    <li><h4>Abra o Apps Script</h4><p>Na planilha, menu <b>Extensões</b> → <b>Apps Script</b>. Abre uma aba nova com um editor de código. Clique em <b>Projeto sem título</b>, no alto, e dê o nome <code>aula_iot_script</code>.</p></li>
+    <li><h4>Cole o código</h4><p>Apague tudo o que estiver no arquivo <b>Código.gs</b> e cole:</p>
+      <div class="ps"><div class="bar">Código.gs (Apps Script)<button class="copy" data-copy="function doPost(e) {&#10;  var ss = SpreadsheetApp.getActiveSpreadsheet();&#10;  var sheet = ss.getSheets()[0];&#10;  var data = JSON.parse(e.postData.contents);&#10;  var agora = new Date();&#10;  sheet.appendRow([agora, data.sensor, data.valor]);&#10;  return ContentService&#10;    .createTextOutput(&quot;OK&quot;)&#10;    .setMimeType(ContentService.MimeType.TEXT);&#10;}">Copiar</button></div>
+<pre>function doPost(e) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheets()[0];
+  var data = JSON.parse(e.postData.contents);
+  var agora = new Date();
+  sheet.appendRow([agora, data.sensor, data.valor]);
+  return ContentService
+    .createTextOutput("OK")
+    .setMimeType(ContentService.MimeType.TEXT);
+}</pre></div>
+      <p>Clique no ícone de disquete 💾 (<b>Salvar projeto</b>) ou aperte <kbd>Ctrl</kbd> + <kbd>S</kbd>.</p>
+      <details class="entenda"><summary>📖 Entenda o código (linha por linha)</summary><div class="wrap"><table class="tab"><tr><th>Trecho</th><th>O que faz</th></tr><tr><td><code>function doPost(e) { ... }</code></td><td>Cria a função que o Google roda <b>sozinho</b> toda vez que alguém envia dados (POST) para a URL do Web App. O <code>e</code> é o “envelope” com tudo o que chegou.</td></tr><tr><td><code>var ss = SpreadsheetApp.getActiveSpreadsheet();</code></td><td>Pega a planilha onde o script está (a <b>aula_iot_planilha</b>) e guarda na variável <code>ss</code>.</td></tr><tr><td><code>var sheet = ss.getSheets()[0];</code></td><td>Da lista de abas, pega a <b>primeira</b> (posição 0). É a aba Dados.</td></tr><tr><td><code>var data = JSON.parse(e.postData.contents);</code></td><td><code>e.postData.contents</code> é o texto que o ESP32 mandou, por exemplo <code>{"sensor":"Temperatura","valor":25.3}</code>. O <code>JSON.parse</code> transforma esse texto num objeto, para usar <code>data.sensor</code> e <code>data.valor</code>.</td></tr><tr><td><code>var agora = new Date();</code></td><td>Pega a data e a hora deste instante, no relógio do Google.</td></tr><tr><td><code>sheet.appendRow([agora, data.sensor, data.valor]);</code></td><td>Acrescenta uma linha <b>no fim</b> da aba, com três células: data/hora (coluna A), nome do sensor (B) e valor (C).</td></tr><tr><td><code>ContentService.createTextOutput(&quot;OK&quot;)</code></td><td>Monta a resposta que volta para quem enviou: o texto “OK”.</td></tr><tr><td><code>.setMimeType(ContentService.MimeType.TEXT);</code></td><td>Avisa que a resposta é texto simples (e não uma página HTML).</td></tr></table></div></details>
+      <div class="note warn"><b class="k">Não use o botão Executar</b><p>Não clique em <b>Executar</b> (▷) no editor. O <code>doPost</code> precisa de um pedido vindo de fora; rodando pelo editor aparece o erro <i>Cannot read properties of undefined (reading 'postData')</i>. Isso é normal e não quer dizer que o código está errado.</p></div>
+    </li>
+    <li><h4>Comece a publicação</h4><p>No canto superior direito, clique no botão azul <b>Implantar</b> → <b>Nova implantação</b>. Na janela, clique na engrenagem ⚙️ ao lado de “Selecione o tipo” e escolha <b>App da Web</b> (Aplicativo da Web). Escolha <b>só</b> esse tipo: não marque “Biblioteca”.</p></li>
+    <li><h4>Configure</h4>
+      <table class="tab cfg"><tr><th colspan="2">Nova implantação</th></tr><tr><th>Campo</th><th>O que colocar</th></tr>
+      <tr><td>Descrição</td><td><code>versão 1</code></td></tr>
+      <tr><td>Executar como</td><td><b>Eu</b> (o seu e-mail)</td></tr>
+      <tr><td>Quem pode acessar</td><td><b>Qualquer pessoa</b></td></tr></table>
+      <p>Clique em <b>Implantar</b>. “Qualquer pessoa” é necessário porque o ESP32 não faz login no Google.</p>
+    </li>
+    <li><h4>Autorize o acesso à planilha (só na primeira vez)</h4>
+      <p>Aparece <b>Autorizar acesso</b>. Clique, escolha a sua conta e siga as telas:</p>
+      <ol>
+        <li>Se aparecer <b>“O Google não verificou este app”</b>: clique em <b>Avançado</b> (pequeno, embaixo à esquerda) e depois em <b>Acessar aula_iot_script (não seguro)</b>. O app é o seu próprio script, por isso o Google não verificou.</li>
+        <li>Na lista de permissões, clique em <b>Permitir</b> (ou marque <b>Selecionar tudo</b> e depois <b>Continuar</b>).</li>
+      </ol>
+    </li>
+    <li><h4>Copie a URL do Web App</h4>
+      <p>A janela mostra <b>Implantação atualizada</b> (ou criada) com o campo <b>App da Web – URL</b>. Clique em <b>Copiar</b>. Ela é assim:</p>
+      <div class="ps output"><div class="bar">Formato da URL</div>
+<pre>https://script.google.com/macros/s/AKfycbx......(um código bem comprido)....../exec</pre></div>
+      <p>Cole a URL aqui embaixo. Todos os códigos desta página passam a usar a sua URL:</p>
+      <div class="grupo-box">
+        <label for="weburl">URL do seu Web App</label>
+        <input id="weburl" type="text" placeholder="https://script.google.com/macros/s/.../exec" autocomplete="off" spellcheck="false" style="max-width:none">
+        <small id="urlStatus"></small>
+        <small>A URL fica salva só neste navegador. Em outro computador, cole de novo.</small>
+      </div>
+      <div class="note warn"><b class="k">Trate a URL como uma senha</b><p>Quem tiver essa URL consegue escrever na sua planilha. Não poste em grupos ou fóruns públicos.</p></div>
+    </li>
+    <li><h4>Teste antes do Wokwi (opcional, recomendado)</h4>
+      <p>No Windows, abra o <b>PowerShell</b> e cole o comando abaixo (já com a sua URL). Ele faz o mesmo que o ESP32 vai fazer:</p>
+      <div class="ps"><div class="bar">PowerShell<button class="copy" data-copy="Invoke-RestMethod -Method Post -Uri &quot;COLE_AQUI_A_URL_DO_WEB_APP&quot; -ContentType &quot;application/json&quot; -Body &#x27;{&quot;sensor&quot;:&quot;Teste&quot;,&quot;valor&quot;:1}&#x27;">Copiar</button></div>
+<pre>Invoke-RestMethod -Method Post -Uri "COLE_AQUI_A_URL_DO_WEB_APP" -ContentType "application/json" -Body '{"sensor":"Teste","valor":1}'</pre></div>
+      <div class="note ok"><b class="k">Confira</b><p>O PowerShell responde <code>OK</code> e aparece uma linha nova na planilha, com <b>Teste</b> e <b>1</b>. Pode apagar essa linha depois.</p></div>
+    </li>
+  </ol>
+  <div class="note warn"><b class="k">Mudou o código? Publique uma nova versão!</b><p>A URL do Web App continua rodando a versão <b>antiga</b> do código até você publicar de novo. Depois de salvar (💾), vá em <b>Implantar</b> → <b>Gerenciar implantações</b> → clique no lápis ✏️ (Editar) → em <b>Versão</b>, escolha <b>Nova versão</b> → <b>Implantar</b>. A URL continua a mesma. (Se usar “Nova implantação”, a URL muda e você precisa colar a nova no Wokwi.)</p></div>
+  <h3>Deu algum erro?</h3>
+  <details class="fix"><summary>A opção “Qualquer pessoa” não aparece</summary><p>A sua conta é da instituição e ela só permite publicar para pessoas do mesmo domínio. Faça tudo (planilha + script) com uma conta Google pessoal (Gmail).</p></details>
+  <details class="fix"><summary>Aparece uma tela de login do Google em vez de “OK”</summary><p>No PowerShell ou no navegador apareceu uma página do Google pedindo login. Confira se “Quem pode acessar” está em <b>Qualquer pessoa</b>. Se não estiver, faça Gerenciar implantações → Editar → mude → Nova versão → Implantar.</p></details>
+  <details class="fix"><summary>Abre uma página “Library Documentation” mostrando “doPost(Object e)”</summary><p>Você copiou o link da <b>Biblioteca</b> (tem <code>/macros/library/</code> no meio e termina em <code>/1</code>), e não o do App da Web. Vá em <b>Implantar</b> → <b>Gerenciar implantações</b>, clique na implantação <b>App da Web</b> e copie a URL que termina em <code>/exec</code>.</p></details>
+  <details class="fix"><summary>“Não foi possível abrir o arquivo neste momento” ou erro 404</summary><p>A URL está incompleta ou é a do editor (termina em <code>/edit</code>). A certa termina em <code>/exec</code>. Copie de novo em Implantar → Gerenciar implantações.</p></details>
+  <details class="fix"><summary>A hora gravada está errada (adiantada ou atrasada)</summary><p>A planilha está com o fuso de outro país. Na planilha: <b>Arquivo</b> → <b>Configurações</b> → <b>Fuso horário</b> → (GMT-03:00) Horário de Brasília. No Apps Script: ⚙️ <b>Configurações do projeto</b> → <b>Fuso horário</b>. Depois publique uma nova versão.</p></details>
+  <label class="done"><input type="checkbox" data-step="script"> Concluí esta etapa</label>
+</section>
+
+<section class="part" id="wokwi">
+  <div class="part-tag"><i style="background:#D8BFD8"></i>Etapa 3</div>
+  <h2>O ESP32 no Wokwi enviando para a planilha</h2>
+  <ol class="steps">
+    <li><h4>Crie o projeto MicroPython</h4><p>Faça login no <a href="https://wokwi.com/micropython" target="_blank" rel="noopener">Wokwi</a> e crie um projeto novo de ESP32 com MicroPython pelo endereço:</p><div class="ps"><div class="bar">Endereço do navegador<button class="copy" data-copy="https://wokwi.com/projects/new/micropython-esp32">Copiar</button></div>
+<pre>https://wokwi.com/projects/new/micropython-esp32</pre></div></li>
+    <li><h4>Cole o código</h4><p>Na aba <b>main.py</b>, apague tudo e cole. A linha <code>URL = </code> já vem com a sua URL, se você colou ela na Etapa 2:</p><div class="ps"><div class="bar">main.py (MicroPython)<button class="copy" data-copy="import network&#10;import urequests&#10;import time&#10;# --- CONFIGURAÇÃO Wi-Fi ---&#10;SSID = &quot;Wokwi-GUEST&quot;&#10;PASSWORD = &quot;&quot;&#10;print(&quot;Conectando ao Wi-Fi...&quot;)&#10;wlan = network.WLAN(network.STA_IF)&#10;wlan.active(True)&#10;wlan.connect(SSID, PASSWORD)&#10;while not wlan.isconnected():&#10;    print(&quot;.&quot;, end=&quot;&quot;)&#10;    time.sleep(0.5)&#10;print(&quot;\nWi-Fi conectado!&quot;)&#10;print(&quot;Endereço IP:&quot;, wlan.ifconfig())&#10;# --- URL DO WEB APP (substitua pela sua) ---&#10;URL = &quot;COLE_AQUI_A_URL_DO_WEB_APP&quot;&#10;# --- LOOP PRINCIPAL ---&#10;while True:&#10;    sensor = &quot;Temperatura&quot;&#10;    valor = 25.3  # valor de exemplo&#10;    dados = {&quot;sensor&quot;: sensor, &quot;valor&quot;: valor}&#10;    try:&#10;        resposta = urequests.post(URL, json=dados)&#10;        print(&quot;Enviado:&quot;, dados, &quot; | Resposta:&quot;, resposta.text)&#10;        resposta.close()&#10;    except Exception as e:&#10;        print(&quot;Erro ao enviar:&quot;, e)&#10;    time.sleep(10)  # envia a cada 10 segundos">Copiar</button></div>
+<pre>import network
+import urequests
+import time
+# --- CONFIGURAÇÃO Wi-Fi ---
+SSID = "Wokwi-GUEST"
+PASSWORD = ""
+print("Conectando ao Wi-Fi...")
+wlan = network.WLAN(network.STA_IF)
+wlan.active(True)
+wlan.connect(SSID, PASSWORD)
+while not wlan.isconnected():
+    print(".", end="")
+    time.sleep(0.5)
+print("\nWi-Fi conectado!")
+print("Endereço IP:", wlan.ifconfig())
+# --- URL DO WEB APP (substitua pela sua) ---
+URL = "COLE_AQUI_A_URL_DO_WEB_APP"
+# --- LOOP PRINCIPAL ---
+while True:
+    sensor = "Temperatura"
+    valor = 25.3  # valor de exemplo
+    dados = {"sensor": sensor, "valor": valor}
+    try:
+        resposta = urequests.post(URL, json=dados)
+        print("Enviado:", dados, " | Resposta:", resposta.text)
+        resposta.close()
+    except Exception as e:
+        print("Erro ao enviar:", e)
+    time.sleep(10)  # envia a cada 10 segundos</pre></div>
+      <details class="entenda"><summary>📖 Entenda o código (linha por linha)</summary><div class="wrap"><table class="tab"><tr><th>Trecho</th><th>O que faz</th></tr><tr><td><code>import network / urequests / time</code></td><td>Carrega as bibliotecas: <b>network</b> (Wi-Fi), <b>urequests</b> (pedidos HTTP, como um navegador) e <b>time</b> (esperas).</td></tr><tr><td><code>SSID = &quot;Wokwi-GUEST&quot; / PASSWORD = &quot;&quot;</code></td><td>Nome e senha da rede. O Wokwi-GUEST é a rede virtual do simulador e não tem senha.</td></tr><tr><td><code>wlan = network.WLAN(network.STA_IF)</code></td><td>Cria o Wi-Fi no modo <b>estação</b>: o ESP32 entra numa rede, como um celular.</td></tr><tr><td><code>wlan.active(True)</code></td><td>Liga o rádio Wi-Fi.</td></tr><tr><td><code>wlan.connect(SSID, PASSWORD)</code></td><td>Pede para entrar na rede.</td></tr><tr><td><code>while not wlan.isconnected(): ...</code></td><td>Enquanto <b>não</b> estiver conectado, imprime um ponto e espera meio segundo. Por isso aparecem os “.....” no monitor.</td></tr><tr><td><code>wlan.ifconfig()</code></td><td>Mostra o endereço IP que o ESP32 recebeu na rede.</td></tr><tr><td><code>URL = &quot;https://script.google.com/...&quot;</code></td><td>O endereço do seu Web App: para onde as leituras vão.</td></tr><tr><td><code>while True:</code></td><td>O laço principal: tudo o que está dentro dele se repete para sempre.</td></tr><tr><td><code>dados = {&quot;sensor&quot;: sensor, &quot;valor&quot;: valor}</code></td><td>Monta a mensagem (um dicionário Python). O <code>urequests</code> transforma em JSON na hora de enviar.</td></tr><tr><td><code>try: ... except Exception as e:</code></td><td>Tenta enviar; se der qualquer erro (internet caiu, por exemplo), em vez de o programa parar, cai no <code>except</code> e mostra o erro.</td></tr><tr><td><code>urequests.post(URL, json=dados)</code></td><td>Envia um pedido <b>POST</b> com os dados em JSON. É isso que faz o <code>doPost</code> rodar lá no Google.</td></tr><tr><td><code>resposta.text</code></td><td>O texto que o Google respondeu: o “OK” do <code>createTextOutput</code>.</td></tr><tr><td><code>resposta.close()</code></td><td>Fecha a conexão e libera a memória do ESP32. Sem isso, a memória acaba depois de alguns envios.</td></tr><tr><td><code>time.sleep(10)</code></td><td>Espera 10 segundos antes da próxima volta do laço.</td></tr></table></div></details>
+    </li>
+    <li><h4>Rode a simulação</h4><p>Clique no ▶ verde. No monitor serial:</p>
+      <div class="ps output"><div class="bar">Monitor serial do Wokwi</div>
+<pre>Conectando ao Wi-Fi...
+......
+Wi-Fi conectado!
+Endereço IP: ('10.13.37.2', '255.255.255.0', '10.13.37.1', '10.13.37.1')
+Enviado: {'sensor': 'Temperatura', 'valor': 25.3}  | Resposta: OK</pre></div>
+      <div class="note ok"><b class="k">Confira</b><p>A cada 10 segundos aparece <b>Resposta: OK</b> no Wokwi e uma <b>linha nova</b> na planilha, com data/hora, “Temperatura” e 25,3.</p></div>
+    </li>
+    <li><h4>Salve o projeto</h4><p>Clique em <b>Save</b> e dê um nome. O endereço da página é o link do seu projeto.</p></li>
+  </ol>
+  <h3>Deu algum erro?</h3>
+  <details class="fix"><summary>Fica muito tempo em “Conectando ao Wi-Fi.......”</summary><p>A demora é do simulador, não do código. O Wokwi-GUEST passa por um servidor gratuito do Wokwi, compartilhado por todo mundo, que fica lento em horários de muito uso (e com a turma toda conectando ao mesmo tempo). Espere até 1 minuto; se não conectar, clique em ⏹ e ▶ de novo; se continuar, salve e recarregue a página (<kbd>F5</kbd>). Não precisa mudar o código.</p></details>
+  <details class="fix"><summary>Aparece “Resposta: OK”, mas a linha demora a aparecer</summary><p>O Google demora: cada envio leva de 1 a 3 segundos. Espere uns 20 segundos e atualize a planilha (<kbd>F5</kbd>). Se a resposta for OK, o dado chegou.</p></details>
+  <details class="fix"><summary>Resposta com um texto enorme em HTML, ou “Página não encontrada”</summary><p>A URL no <code>main.py</code> está errada ou incompleta. Copie de novo (deve terminar em <code>/exec</code>) e cole entre as aspas.</p></details>
+  <details class="fix"><summary>Resposta com uma mensagem de erro do Google (“TypeError”, “Exception”)</summary><p>O <code>doPost</code> deu erro. Abra o Apps Script → menu da esquerda, <b>Execuções</b> (ícone ☰ com relógio): o erro aparece lá, em vermelho. O mais comum é ter mudado o código e não ter publicado uma <b>nova versão</b>.</p></details>
+  <details class="fix"><summary>“Erro ao enviar: Redirects not yet supported”</summary><p>A versão do MicroPython do projeto é muito antiga. Crie o projeto de novo pelo link do passo 1. Mesmo com esse aviso, confira a planilha: o dado costuma chegar.</p></details>
+  <details class="fix"><summary>A resposta é um HTML enorme terminando em “Script function not found: doGet”</summary><p>O Google responde aos envios com um redirecionamento, e às vezes a resposta que volta para o ESP32 é esta página de aviso, e não o “OK”. <b>Não atrapalha a gravação</b>: confira a planilha. O aviso some no Complemento 3, que cria a função <code>doGet</code>.</p></details>
+  <details class="fix"><summary>“Erro ao enviar: (-29312, 'SSL - The connection indicated an EOF')”</summary><p>A conexão segura (HTTPS) com o Google caiu. O Google atende em dois passos: primeiro roda o <code>doPost</code> e <b>grava a linha</b>, depois manda o ESP32 buscar a resposta “OK”. Quase sempre a queda acontece no segundo passo, então <b>confira a planilha: a linha costuma estar lá</b>. Por isso o código <b>não</b> tenta de novo (criaria linhas repetidas). Nos códigos dos complementos, o <code>gc.collect()</code> (libera memória) e a pausa de 2 segundos depois do Wi-Fi deixam esse aviso bem mais raro. <b>Não diminua o intervalo do <code>time.sleep</code> para menos de 15 segundos</b>: cada envio abre uma conexão HTTPS, e o ESP32 do simulador não dá conta de muitas seguidas.</p></details>
+  <details class="fix"><summary>“Erro ao enviar: [Errno 113]”, “-202”, “ECONNRESET” ou “MemoryError”</summary><p>Falha momentânea de rede ou memória. O código tenta de novo sozinho na próxima volta. Se acontecer sempre, aumente o <code>time.sleep(10)</code> para 15.</p></details>
+  <label class="done"><input type="checkbox" data-step="wokwi"> Concluí esta etapa</label>
+</section>
+
+<section class="part" id="sensor">
+  <div class="part-tag"><i style="background:var(--dash)"></i>Etapa 4 · Complemento 1</div>
+  <h2>+ Um sensor de verdade (DHT22)</h2>
+  <p>O valor <code>25.3</code> fixo não mede nada. Vamos ligar um <b>DHT22</b>, que mede temperatura e umidade, e mandar as duas leituras. O Apps Script <b>não muda</b>: cada leitura vira uma linha, com o nome do sensor na coluna B.</p>
+  <ol class="steps">
+    <li><h4>Monte o circuito</h4>
+      <p>No Wokwi, clique no <b>+</b> azul e adicione um <b>DHT22</b>. Ligue: <b>VCC → 3V3</b>, <b>SDA → 15</b>, <b>GND → GND</b>.</p>
+      <p>Já aproveite e coloque o que vai ser usado no Complemento 3: um <b>LED</b> verde com um <b>resistor de 220 Ω</b>: <b>pino 26 → resistor → perna A do LED</b>, e <b>perna C → GND</b>.</p>
+      <details class="json"><summary>Atalho: diagram.json com o circuito pronto</summary><pre id="diag">{
+  "version": 1,
+  "author": "IoT + Planilha",
+  "editor": "wokwi",
+  "parts": [
+    { "type": "board-esp32-devkit-c-v4", "id": "esp", "top": 0, "left": 0, "attrs": { "env": "micropython-20231005-v1.21.0" } },
+    { "type": "wokwi-dht22", "id": "dht1", "top": -105, "left": -140, "attrs": { "temperature": "25", "humidity": "55" } },
+    { "type": "wokwi-led", "id": "led1", "top": -30, "left": 230, "attrs": { "color": "green" } },
+    { "type": "wokwi-resistor", "id": "r1", "top": 40, "left": 190, "rotate": 90, "attrs": { "value": "220" } }
+  ],
+  "connections": [
+    [ "esp:TX", "$serialMonitor:RX", "", [] ],
+    [ "esp:RX", "$serialMonitor:TX", "", [] ],
+    [ "dht1:VCC", "esp:3V3", "red", [] ],
+    [ "dht1:GND", "esp:GND.1", "black", [] ],
+    [ "dht1:SDA", "esp:15", "green", [] ],
+    [ "esp:26", "r1:1", "green", [] ],
+    [ "r1:2", "led1:A", "green", [] ],
+    [ "led1:C", "esp:GND.2", "black", [] ]
+  ],
+  "dependencies": {}
+}</pre><div class="actions"><button class="copy" data-copy-from="diag">Copiar</button></div></details>
+    </li>
+    <li><h4>Troque o código</h4><p>Apague o <code>main.py</code> e cole:</p><div class="ps"><div class="bar">main.py (MicroPython)<button class="copy" data-copy="import network&#10;import urequests&#10;import time&#10;import dht&#10;import gc&#10;from machine import Pin&#10;&#10;# --- CONFIGURAÇÃO Wi-Fi ---&#10;SSID = &quot;Wokwi-GUEST&quot;&#10;PASSWORD = &quot;&quot;&#10;print(&quot;Conectando ao Wi-Fi...&quot;)&#10;wlan = network.WLAN(network.STA_IF)&#10;wlan.active(True)&#10;wlan.connect(SSID, PASSWORD)&#10;while not wlan.isconnected():&#10;    print(&quot;.&quot;, end=&quot;&quot;)&#10;    time.sleep(0.5)&#10;print(&quot;\nWi-Fi conectado!&quot;)&#10;&#10;# --- URL DO WEB APP ---&#10;URL = &quot;COLE_AQUI_A_URL_DO_WEB_APP&quot;&#10;&#10;# --- SENSOR ---&#10;sensor_dht = dht.DHT22(Pin(15))   # DHT22 ligado no pino 15&#10;&#10;def enviar(sensor, valor):&#10;    dados = {&quot;sensor&quot;: sensor, &quot;valor&quot;: valor}&#10;    gc.collect()                            # libera memória antes do HTTPS&#10;    try:&#10;        resposta = urequests.post(URL, json=dados)&#10;        print(&quot;Enviado:&quot;, dados, &quot; | Resposta:&quot;, resposta.text)&#10;        resposta.close()&#10;    except Exception as e:&#10;        # O Google grava a linha ANTES de responder. Se a conexão cair&#10;        # depois disso, o dado já está na planilha: só a resposta se perdeu.&#10;        print(&quot;Aviso ao enviar&quot;, dados, &quot;:&quot;, e, &quot;(confira a planilha)&quot;)&#10;&#10;# --- LOOP PRINCIPAL ---&#10;while True:&#10;    sensor_dht.measure()                          # faz a leitura&#10;    enviar(&quot;Temperatura&quot;, sensor_dht.temperature())&#10;    enviar(&quot;Umidade&quot;, sensor_dht.humidity())&#10;    time.sleep(15)  # a cada 15 segundos (2 linhas por vez na planilha)">Copiar</button></div>
+<pre>import network
+import urequests
+import time
+import dht
+import gc
+from machine import Pin
+
+# --- CONFIGURAÇÃO Wi-Fi ---
+SSID = "Wokwi-GUEST"
+PASSWORD = ""
+print("Conectando ao Wi-Fi...")
+wlan = network.WLAN(network.STA_IF)
+wlan.active(True)
+wlan.connect(SSID, PASSWORD)
+while not wlan.isconnected():
+    print(".", end="")
+    time.sleep(0.5)
+print("\nWi-Fi conectado!")
+
+# --- URL DO WEB APP ---
+URL = "COLE_AQUI_A_URL_DO_WEB_APP"
+
+# --- SENSOR ---
+sensor_dht = dht.DHT22(Pin(15))   # DHT22 ligado no pino 15
+
+def enviar(sensor, valor):
+    dados = {"sensor": sensor, "valor": valor}
+    gc.collect()                            # libera memória antes do HTTPS
+    try:
+        resposta = urequests.post(URL, json=dados)
+        print("Enviado:", dados, " | Resposta:", resposta.text)
+        resposta.close()
+    except Exception as e:
+        # O Google grava a linha ANTES de responder. Se a conexão cair
+        # depois disso, o dado já está na planilha: só a resposta se perdeu.
+        print("Aviso ao enviar", dados, ":", e, "(confira a planilha)")
+
+# --- LOOP PRINCIPAL ---
+while True:
+    sensor_dht.measure()                          # faz a leitura
+    enviar("Temperatura", sensor_dht.temperature())
+    enviar("Umidade", sensor_dht.humidity())
+    time.sleep(15)  # a cada 15 segundos (2 linhas por vez na planilha)</pre></div><details class="entenda"><summary>📖 Entenda o código (linha por linha)</summary><div class="wrap"><table class="tab"><tr><th>Trecho</th><th>O que faz</th></tr><tr><td><code>import dht</code></td><td>Biblioteca do sensor DHT22 (temperatura e umidade).</td></tr><tr><td><code>import gc</code></td><td>O “coletor de lixo”: limpa da memória o que não é mais usado.</td></tr><tr><td><code>from machine import Pin</code></td><td>Traz a classe <code>Pin</code>, que representa um pino do ESP32.</td></tr><tr><td><code>time.sleep(2)  (depois do Wi-Fi)</code></td><td>Espera 2 segundos para a rede do simulador ficar pronta antes do primeiro envio.</td></tr><tr><td><code>sensor_dht = dht.DHT22(Pin(15))</code></td><td>Diz que há um DHT22 ligado no pino 15.</td></tr><tr><td><code>def enviar(sensor, valor):</code></td><td>Cria uma <b>função</b>: um bloco de código com nome, que pode ser chamado várias vezes com valores diferentes. Evita repetir o mesmo código para temperatura e umidade.</td></tr><tr><td><code>gc.collect()</code></td><td>Limpa a memória antes de cada envio, porque a conexão HTTPS gasta bastante.</td></tr><tr><td><code>except ... print(&quot;Aviso ao enviar&quot; ...)</code></td><td>Se a conexão cair, avisa, mas lembra que o dado pode já estar na planilha: o Google grava antes de responder.</td></tr><tr><td><code>sensor_dht.measure()</code></td><td>Manda o sensor fazer uma leitura nova.</td></tr><tr><td><code>sensor_dht.temperature() / humidity()</code></td><td>Devolvem a temperatura (°C) e a umidade (%) da última leitura.</td></tr><tr><td><code>enviar(&quot;Temperatura&quot;, ...) / enviar(&quot;Umidade&quot;, ...)</code></td><td>Chama a função duas vezes: entram duas linhas na planilha.</td></tr><tr><td><code>time.sleep(15)</code></td><td>Espera 15 segundos. Menos que isso sobrecarrega o HTTPS do simulador.</td></tr></table></div></details>
+      <p>O envio virou uma <b>função</b>, <code>enviar(sensor, valor)</code>, chamada duas vezes: assim não repetimos o mesmo código. Também entraram o <code>gc.collect()</code>, que libera memória antes de cada envio (o HTTPS gasta bastante), e uma pausa de 2 segundos depois do Wi-Fi.</p></li>
+    <li><h4>Teste</h4><p>Rode. Com a simulação ligada, clique no DHT22 e mexa nas barrinhas de temperatura e umidade.</p>
+      <div class="note ok"><b class="k">Confira</b><p>A cada 15 segundos entram <b>duas linhas</b> na planilha: uma “Temperatura” e uma “Umidade”, com os valores que você colocou no DHT22.</p></div></li>
+  </ol>
+  <div class="gs-mock" aria-hidden="true"><div class="gs-top"><b>▦</b> aula_iot_planilha</div><div class="gs-grid"><div class="gs-h"></div><div class="gs-h">A</div><div class="gs-h">B</div><div class="gs-h">C</div><div class="gs-h">1</div><div><b>Data/Hora</b></div><div><b>Sensor</b></div><div><b>Valor</b></div><div class="gs-h">2</div><div>06/11/2026 14:30:05</div><div>Temperatura</div><div>24</div><div class="gs-h">3</div><div>06/11/2026 14:30:07</div><div>Umidade</div><div>40</div><div class="gs-h">4</div><div>06/11/2026 14:30:20</div><div>Temperatura</div><div>31,5</div></div><div class="gs-tabs"><span class="on">Dados</span></div></div>
+  <label class="done"><input type="checkbox" data-step="sensor"> Concluí esta etapa</label>
+</section>
+
+<section class="part" id="resumo">
+  <div class="part-tag"><i style="background:var(--dash)"></i>Etapa 5 · Complemento 2</div>
+  <h2>+ Uma planilha inteligente: resumo, cores e gráfico</h2>
+  <p>Agora a planilha trabalha sozinha: calcula estatísticas, pinta os valores altos e desenha um gráfico, tudo atualizado a cada leitura que chega.</p>
+  <div class="note tip"><b class="k">Antes de colar as fórmulas</b><p>Use <b>ponto e vírgula (;)</b> entre os argumentos, como está aqui. Se a sua planilha estiver em inglês e der erro, troque por vírgula (,) ou mude em Arquivo → Configurações → Localidade → Brasil. As fórmulas estão com o nome em inglês porque funcionam em qualquer idioma; o Google pode traduzir sozinho (AVERAGEIF vira MÉDIASE, por exemplo). É normal.</p></div>
+  <h3>Parte A: a aba de resumo</h3>
+  <ol class="steps">
+    <li><h4>Crie a aba “Resumo”</h4><p>Lá embaixo, clique no <b>+</b> (Adicionar página). Clique com o botão direito na aba nova → <b>Renomear</b> → <code>Resumo</code>. A aba <b>Dados</b> precisa continuar sendo a primeira.</p></li>
+    <li><h4>Escreva os nomes e cole as fórmulas</h4><p>Em cada linha, escreva o nome na coluna A (por exemplo, em A1 só <code>Última temperatura</code>) e cole a fórmula na coluna B da mesma linha:</p><div class="wrap"><table class="tab"><tr><th>Nº</th><th>Escreva na coluna A</th><th>Cole na coluna B</th><th></th></tr><tr><td>1</td><td><b>Última temperatura</b></td><td><code>=INDEX(FILTER(Dados!C:C;Dados!B:B=&quot;Temperatura&quot;);COUNTIF(Dados!B:B;&quot;Temperatura&quot;))</code></td><td><button class="copy copy-dark" data-copy="=INDEX(FILTER(Dados!C:C;Dados!B:B=&quot;Temperatura&quot;);COUNTIF(Dados!B:B;&quot;Temperatura&quot;))">Copiar</button></td></tr><tr><td>2</td><td><b>Média</b></td><td><code>=ROUND(AVERAGEIF(Dados!B:B;&quot;Temperatura&quot;;Dados!C:C);1)</code></td><td><button class="copy copy-dark" data-copy="=ROUND(AVERAGEIF(Dados!B:B;&quot;Temperatura&quot;;Dados!C:C);1)">Copiar</button></td></tr><tr><td>3</td><td><b>Máxima</b></td><td><code>=MAXIFS(Dados!C:C;Dados!B:B;&quot;Temperatura&quot;)</code></td><td><button class="copy copy-dark" data-copy="=MAXIFS(Dados!C:C;Dados!B:B;&quot;Temperatura&quot;)">Copiar</button></td></tr><tr><td>4</td><td><b>Mínima</b></td><td><code>=MINIFS(Dados!C:C;Dados!B:B;&quot;Temperatura&quot;)</code></td><td><button class="copy copy-dark" data-copy="=MINIFS(Dados!C:C;Dados!B:B;&quot;Temperatura&quot;)">Copiar</button></td></tr><tr><td>5</td><td><b>Nº de leituras</b></td><td><code>=COUNTIF(Dados!B:B;&quot;Temperatura&quot;)</code></td><td><button class="copy copy-dark" data-copy="=COUNTIF(Dados!B:B;&quot;Temperatura&quot;)">Copiar</button></td></tr><tr><td>6</td><td><b>Acima de 30 °C</b></td><td><code>=COUNTIFS(Dados!B:B;&quot;Temperatura&quot;;Dados!C:C;&quot;&gt;30&quot;)</code></td><td><button class="copy copy-dark" data-copy="=COUNTIFS(Dados!B:B;&quot;Temperatura&quot;;Dados!C:C;&quot;&gt;30&quot;)">Copiar</button></td></tr></table></div>
+      <div class="wrap"><table class="tab"><tr><th>Fórmula</th><th>O que faz</th></tr>
+        <tr><td><code>COUNTIF</code> (CONT.SE)</td><td>Conta quantas linhas da coluna B são “Temperatura”.</td></tr>
+        <tr><td><code>AVERAGEIF</code> (MÉDIASE)</td><td>Faz a média da coluna C, só nas linhas de “Temperatura”.</td></tr>
+        <tr><td><code>MAXIFS</code> / <code>MINIFS</code></td><td>Maior e menor valor da coluna C, só de “Temperatura”.</td></tr>
+        <tr><td><code>FILTER</code> + <code>INDEX</code></td><td>Separa só as temperaturas e pega a última da lista.</td></tr>
+        <tr><td><code>COUNTIFS</code> (CONT.SES)</td><td>Conta com duas condições: é temperatura <b>e</b> passou de 30.</td></tr>
+      </table></div>
+      <div class="note ok"><b class="k">Confira</b><p>Os números aparecem na hora e mudam sozinhos a cada leitura nova. Mude a temperatura no DHT22 para 35 °C e veja a máxima e o “Acima de 30” mudarem.</p></div>
+    </li>
+  </ol>
+  <h3>Parte B: cores automáticas</h3>
+  <ol class="steps">
+    <li><h4>Selecione a coluna dos valores</h4><p>Volte para a aba <b>Dados</b> e clique na letra <b>C</b>, no alto da coluna.</p></li>
+    <li><h4>Crie a regra</h4><p>Menu <b>Formatar</b> → <b>Formatação condicional</b>. No painel da direita, em <b>Regras de formatação</b>, escolha <b>A fórmula personalizada é</b> e cole:</p>
+      <div class="ps"><div class="bar">Fórmula personalizada<button class="copy" data-copy="=AND($B1=&quot;Temperatura&quot;;$C1&gt;30)">Copiar</button></div>
+<pre>=AND($B1="Temperatura";$C1&gt;30)</pre></div>
+      <p>Em <b>Estilo de formatação</b>, escolha o fundo vermelho claro e clique em <b>Concluído</b>.</p>
+      <div class="note ok"><b class="k">Confira</b><p>Toda temperatura acima de 30 fica com o fundo vermelho, inclusive as que ainda vão chegar.</p></div></li>
+  </ol>
+  <h3>Parte C: o gráfico</h3>
+  <p>A aba Dados mistura temperatura e umidade, o que deixaria o gráfico confuso. Primeiro separamos só as temperaturas.</p>
+  <ol class="steps">
+    <li><h4>Separe as temperaturas</h4><p>Na aba <b>Resumo</b>, clique na célula <b>D1</b> e cole:</p><div class="ps"><div class="bar">Célula D1 da aba Resumo<button class="copy" data-copy="=QUERY(Dados!A:C;&quot;select A, C where B = &#x27;Temperatura&#x27;&quot;;1)">Copiar</button></div>
+<pre>=QUERY(Dados!A:C;"select A, C where B = 'Temperatura'";1)</pre></div>
+      <p>O <code>QUERY</code> funciona como uma pergunta ao banco: “me dê a data (A) e o valor (C) das linhas em que o sensor (B) é Temperatura”. As colunas D e E se enchem sozinhas.</p></li>
+    <li><h4>Insira o gráfico</h4><p>Selecione as colunas <b>D e E</b> (clique na letra D e arraste até a E). Menu <b>Inserir</b> → <b>Gráfico</b>. No painel da direita (<b>Editor de gráficos</b>), em <b>Tipo de gráfico</b>, escolha <b>Gráfico de linhas</b>.</p>
+      <p>Ainda no Editor de gráficos, lá embaixo, marque <b>Usar a coluna D como rótulos</b>. Assim a data e hora vão para o eixo de baixo (eixo X), em vez de virar uma segunda linha.</p>
+      <div class="note warn"><b class="k">Apareceram duas linhas (azul e vermelha)?</b><p>O Google tratou a Data/Hora como valor. Marque <b>Usar a coluna D como rótulos</b>; se a linha extra continuar, em <b>Série</b> clique nos três pontinhos ao lado de <b>Data/Hora</b> → <b>Remover</b>.</p></div>
+      <div class="note ok"><b class="k">Confira</b><p>Aparece <b>uma</b> linha: a temperatura ao longo do tempo, com as horas no eixo de baixo. Ela ganha um ponto novo a cada leitura.</p></div></li>
+  </ol>
+  <div class="challenge"><h4>Desafio</h4><p>Faça o mesmo para a <b>umidade</b>: média, máxima e mínima nas linhas 8 a 10 da aba Resumo, e um segundo gráfico. Dica: basta trocar “Temperatura” por “Umidade” nas fórmulas.</p></div>
+  <label class="done"><input type="checkbox" data-step="resumo"> Concluí esta etapa</label>
+</section>
+
+<section class="part" id="controle">
+  <div class="part-tag"><i style="background:var(--dash)"></i>Etapa 6 · Complemento 3</div>
+  <h2>+ A planilha controlando o ESP32</h2>
+  <p>Até aqui o dado só ia do ESP32 para a planilha. Agora ele faz o caminho de volta: você escreve <b>ON</b> ou <b>OFF</b> numa célula e o LED do Wokwi obedece. O ESP32 usa um pedido <b>GET</b> para perguntar à planilha qual é o comando, e quem responde é uma função nova no Apps Script, a <code>doGet</code>.</p>
+  <div class="flow" aria-label="Ida e volta">
+    <span class="fnode" style="background:#C8E6C9">ESP32</span><span class="wire"></span>
+    <span class="fnode c-function">GET: “qual o comando?”</span><span class="wire"></span>
+    <span class="fnode c-gs">doGet lê Controle!B1</span><span class="wire"></span>
+    <span class="fnode c-function">responde “ON”</span><span class="wire"></span>
+    <span class="fnode" style="background:#C8E6C9">LED acende</span>
+  </div>
+  <ol class="steps">
+    <li><h4>Crie a aba “Controle”</h4><p>Clique no <b>+</b> lá embaixo e renomeie a aba nova para <code>Controle</code>. Escreva <b>A1</b> <code>LED</code> e <b>B1</b> <code>ON</code>.</p>
+      <p>Opcional: clique em B1 → menu <b>Inserir</b> → <b>Menu suspenso</b> → opções <code>ON</code> e <code>OFF</code> → <b>Concluído</b>. Assim basta escolher na lista.</p>
+      <div class="gs-mock" aria-hidden="true"><div class="gs-top"><b>▦</b> aula_iot_planilha</div><div class="gs-grid"><div class="gs-h"></div><div class="gs-h">A</div><div class="gs-h">B</div><div class="gs-h">C</div><div class="gs-h">1</div><div><b>LED</b></div><div>ON ▾</div><div></div><div class="gs-h">2</div><div></div><div></div><div></div></div><div class="gs-tabs"><span class="">Dados</span><span class="">Resumo</span><span class="on">Controle</span></div></div></li>
+    <li><h4>Atualize o Apps Script</h4><p>No Apps Script, apague tudo e cole o código abaixo. Mudaram duas coisas: o <code>doPost</code> agora procura a aba pelo nome (<code>"Dados"</code>), porque a planilha tem várias abas, e entrou a função <code>doGet</code>.</p>
+      <div class="ps"><div class="bar">Código.gs (Apps Script)<button class="copy" data-copy="function doPost(e) {&#10;  var ss = SpreadsheetApp.getActiveSpreadsheet();&#10;  var sheet = ss.getSheetByName(&quot;Dados&quot;);          // aba das leituras&#10;  var data = JSON.parse(e.postData.contents);&#10;  var agora = new Date();&#10;  sheet.appendRow([agora, data.sensor, data.valor]);&#10;  return ContentService&#10;    .createTextOutput(&quot;OK&quot;)&#10;    .setMimeType(ContentService.MimeType.TEXT);&#10;}&#10;&#10;// NOVO: o ESP32 pergunta &quot;qual o comando?&quot; e a planilha responde&#10;function doGet(e) {&#10;  var ss = SpreadsheetApp.getActiveSpreadsheet();&#10;  var controle = ss.getSheetByName(&quot;Controle&quot;);    // aba do controle&#10;  var comando = String(controle.getRange(&quot;B1&quot;).getValue()).trim().toUpperCase();&#10;  return ContentService&#10;    .createTextOutput(comando)                     // responde &quot;ON&quot; ou &quot;OFF&quot;&#10;    .setMimeType(ContentService.MimeType.TEXT);&#10;}">Copiar</button></div>
+<pre>function doPost(e) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName("Dados");          // aba das leituras
+  var data = JSON.parse(e.postData.contents);
+  var agora = new Date();
+  sheet.appendRow([agora, data.sensor, data.valor]);
+  return ContentService
+    .createTextOutput("OK")
+    .setMimeType(ContentService.MimeType.TEXT);
+}
+
+// NOVO: o ESP32 pergunta "qual o comando?" e a planilha responde
+function doGet(e) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var controle = ss.getSheetByName("Controle");    // aba do controle
+  var comando = String(controle.getRange("B1").getValue()).trim().toUpperCase();
+  return ContentService
+    .createTextOutput(comando)                     // responde "ON" ou "OFF"
+    .setMimeType(ContentService.MimeType.TEXT);
+}</pre></div><details class="entenda"><summary>📖 Entenda o código (linha por linha)</summary><div class="wrap"><table class="tab"><tr><th>Trecho</th><th>O que faz</th></tr><tr><td><code>ss.getSheetByName(&quot;Dados&quot;)</code></td><td>Agora a planilha tem várias abas, então buscamos a aba <b>pelo nome</b>, e não pela posição. O nome precisa ser exatamente igual.</td></tr><tr><td><code>function doGet(e) { ... }</code></td><td>A função que o Google roda quando alguém faz um pedido <b>GET</b> na URL: quando o ESP32 pergunta, ou quando você abre a URL no navegador.</td></tr><tr><td><code>controle.getRange(&quot;B1&quot;).getValue()</code></td><td>Lê o que está escrito na célula B1 da aba Controle.</td></tr><tr><td><code>String(...)</code></td><td>Garante que o valor é texto, mesmo se a célula estiver vazia.</td></tr><tr><td><code>.trim()</code></td><td>Tira espaços sobrando no começo e no fim (“ ON ” vira “ON”).</td></tr><tr><td><code>.toUpperCase()</code></td><td>Passa para maiúsculas (“on” vira “ON”). Assim tanto faz como o aluno escreveu na célula.</td></tr><tr><td><code>createTextOutput(comando)</code></td><td>Responde só a palavra: “ON” ou “OFF”.</td></tr></table></div></details>
+      <p>Salve (💾) e <b>publique uma nova versão</b>: <b>Implantar</b> → <b>Gerenciar implantações</b> → lápis ✏️ → <b>Versão: Nova versão</b> → <b>Implantar</b>.</p></li>
+    <li><h4>Teste no navegador</h4><p>Abra a URL do Web App (a que termina em <code>/exec</code>) numa aba nova do navegador. Abrir um endereço no navegador é um pedido GET, então quem responde é o <code>doGet</code>:</p><div class="ps"><div class="bar">Endereço do navegador<button class="copy" data-copy="COLE_AQUI_A_URL_DO_WEB_APP">Copiar</button></div>
+<pre>COLE_AQUI_A_URL_DO_WEB_APP</pre></div>
+      <div class="note ok"><b class="k">Confira</b><p>A página mostra só a palavra <b>ON</b>. Troque B1 para OFF, atualize a página (<kbd>F5</kbd>) e ela mostra <b>OFF</b>.</p></div></li>
+    <li><h4>Atualize o código do ESP32</h4><p>Confira se o LED do Complemento 1 está no circuito (pino 26) e cole o novo <code>main.py</code>:</p><div class="ps"><div class="bar">main.py (MicroPython)<button class="copy" data-copy="import network&#10;import urequests&#10;import time&#10;import dht&#10;import gc&#10;from machine import Pin&#10;&#10;# --- CONFIGURAÇÃO Wi-Fi ---&#10;SSID = &quot;Wokwi-GUEST&quot;&#10;PASSWORD = &quot;&quot;&#10;print(&quot;Conectando ao Wi-Fi...&quot;)&#10;wlan = network.WLAN(network.STA_IF)&#10;wlan.active(True)&#10;wlan.connect(SSID, PASSWORD)&#10;while not wlan.isconnected():&#10;    print(&quot;.&quot;, end=&quot;&quot;)&#10;    time.sleep(0.5)&#10;print(&quot;\nWi-Fi conectado!&quot;)&#10;&#10;# --- URL DO WEB APP ---&#10;URL = &quot;COLE_AQUI_A_URL_DO_WEB_APP&quot;&#10;&#10;# --- SENSOR E ATUADOR ---&#10;sensor_dht = dht.DHT22(Pin(15))   # DHT22 no pino 15&#10;led = Pin(26, Pin.OUT)            # LED (com resistor) no pino 26&#10;&#10;def enviar(sensor, valor):&#10;    dados = {&quot;sensor&quot;: sensor, &quot;valor&quot;: valor}&#10;    gc.collect()                            # libera memória antes do HTTPS&#10;    try:&#10;        resposta = urequests.post(URL, json=dados)   # POST = gravar&#10;        print(&quot;Enviado:&quot;, dados, &quot; | Resposta:&quot;, resposta.text)&#10;        resposta.close()&#10;    except Exception as e:&#10;        # O Google grava a linha ANTES de responder. Se a conexão cair&#10;        # depois disso, o dado já está na planilha: só a resposta se perdeu.&#10;        print(&quot;Aviso ao enviar&quot;, dados, &quot;:&quot;, e, &quot;(confira a planilha)&quot;)&#10;&#10;def ler_comando():&#10;    # Pedir o comando não grava nada, então pode tentar de novo sem problema&#10;    for tentativa in range(2):&#10;        gc.collect()&#10;        try:&#10;            resposta = urequests.get(URL)             # GET = perguntar&#10;            comando = resposta.text.strip()&#10;            resposta.close()&#10;            return comando&#10;        except Exception as e:&#10;            print(&quot;Erro ao ler comando (tentativa&quot;, tentativa + 1, &quot;):&quot;, e)&#10;            time.sleep(2)&#10;    return None                                       # não conseguiu: LED fica como está&#10;&#10;# --- LOOP PRINCIPAL ---&#10;while True:&#10;    sensor_dht.measure()&#10;    enviar(&quot;Temperatura&quot;, sensor_dht.temperature())&#10;    enviar(&quot;Umidade&quot;, sensor_dht.humidity())&#10;&#10;    comando = ler_comando()&#10;    print(&quot;Comando da planilha:&quot;, comando)&#10;    if comando == &quot;ON&quot;:&#10;        led.value(1)&#10;    elif comando == &quot;OFF&quot;:&#10;        led.value(0)&#10;&#10;    time.sleep(15)">Copiar</button></div>
+<pre>import network
+import urequests
+import time
+import dht
+import gc
+from machine import Pin
+
+# --- CONFIGURAÇÃO Wi-Fi ---
+SSID = "Wokwi-GUEST"
+PASSWORD = ""
+print("Conectando ao Wi-Fi...")
+wlan = network.WLAN(network.STA_IF)
+wlan.active(True)
+wlan.connect(SSID, PASSWORD)
+while not wlan.isconnected():
+    print(".", end="")
+    time.sleep(0.5)
+print("\nWi-Fi conectado!")
+
+# --- URL DO WEB APP ---
+URL = "COLE_AQUI_A_URL_DO_WEB_APP"
+
+# --- SENSOR E ATUADOR ---
+sensor_dht = dht.DHT22(Pin(15))   # DHT22 no pino 15
+led = Pin(26, Pin.OUT)            # LED (com resistor) no pino 26
+
+def enviar(sensor, valor):
+    dados = {"sensor": sensor, "valor": valor}
+    gc.collect()                            # libera memória antes do HTTPS
+    try:
+        resposta = urequests.post(URL, json=dados)   # POST = gravar
+        print("Enviado:", dados, " | Resposta:", resposta.text)
+        resposta.close()
+    except Exception as e:
+        # O Google grava a linha ANTES de responder. Se a conexão cair
+        # depois disso, o dado já está na planilha: só a resposta se perdeu.
+        print("Aviso ao enviar", dados, ":", e, "(confira a planilha)")
+
+def ler_comando():
+    # Pedir o comando não grava nada, então pode tentar de novo sem problema
+    for tentativa in range(2):
+        gc.collect()
+        try:
+            resposta = urequests.get(URL)             # GET = perguntar
+            comando = resposta.text.strip()
+            resposta.close()
+            return comando
+        except Exception as e:
+            print("Erro ao ler comando (tentativa", tentativa + 1, "):", e)
+            time.sleep(2)
+    return None                                       # não conseguiu: LED fica como está
+
+# --- LOOP PRINCIPAL ---
+while True:
+    sensor_dht.measure()
+    enviar("Temperatura", sensor_dht.temperature())
+    enviar("Umidade", sensor_dht.humidity())
+
+    comando = ler_comando()
+    print("Comando da planilha:", comando)
+    if comando == "ON":
+        led.value(1)
+    elif comando == "OFF":
+        led.value(0)
+
+    time.sleep(15)</pre></div><details class="entenda"><summary>📖 Entenda o código (linha por linha)</summary><div class="wrap"><table class="tab"><tr><th>Trecho</th><th>O que faz</th></tr><tr><td><code>led = Pin(26, Pin.OUT)</code></td><td>O pino 26 vira uma <b>saída</b>: o ESP32 consegue ligar (1) e desligar (0) o LED.</td></tr><tr><td><code>def ler_comando():</code></td><td>Função que pergunta à planilha qual é o comando.</td></tr><tr><td><code>urequests.get(URL)</code></td><td>Faz um pedido <b>GET</b>: é ele que faz o <code>doGet</code> rodar no Google. POST é para <b>mandar</b> dados; GET é para <b>pedir</b>.</td></tr><tr><td><code>resposta.text.strip()</code></td><td>Pega o texto da resposta e tira espaços e quebras de linha.</td></tr><tr><td><code>for tentativa in range(2):</code></td><td>Tenta pedir o comando até 2 vezes. Aqui pode repetir sem medo, porque o GET só <b>pergunta</b> e não grava nada. (No envio, repetir criaria linhas duplicadas.)</td></tr><tr><td><code>return comando / return None</code></td><td>Devolve o comando lido. Se as duas tentativas falharem, devolve <code>None</code> (nada), e o LED fica como está.</td></tr><tr><td><code>if comando == &quot;ON&quot;: led.value(1)</code></td><td>Se a planilha disse ON, acende o LED.</td></tr><tr><td><code>elif comando == &quot;OFF&quot;: led.value(0)</code></td><td>Senão, se disse OFF, apaga. Qualquer outra coisa não muda o LED.</td></tr></table></div></details></li>
+    <li><h4>Teste o controle</h4><p>Rode o Wokwi e, na planilha, troque B1 entre <b>ON</b> e <b>OFF</b>.</p>
+      <div class="note ok"><b class="k">Confira</b><p>Em até 15 segundos o LED verde do Wokwi acende ou apaga, e o monitor serial mostra <i>Comando da planilha: ON</i>. As leituras continuam entrando na aba Dados.</p></div></li>
+  </ol>
+  <div class="note warn"><b class="k">Mudou o código? Publique uma nova versão!</b><p>A URL do Web App continua rodando a versão <b>antiga</b> do código até você publicar de novo. Depois de salvar (💾), vá em <b>Implantar</b> → <b>Gerenciar implantações</b> → clique no lápis ✏️ (Editar) → em <b>Versão</b>, escolha <b>Nova versão</b> → <b>Implantar</b>. A URL continua a mesma. (Se usar “Nova implantação”, a URL muda e você precisa colar a nova no Wokwi.)</p></div>
+  <details class="fix"><summary>No navegador aparece “Função de script não encontrada: doGet”</summary><p>O Web App ainda roda o código antigo, sem o <code>doGet</code>. Publique uma nova versão (aviso acima).</p></details>
+  <details class="fix"><summary>Erro “Cannot read properties of null (reading 'getRange')” ou “appendRow”</summary><p>A aba não se chama exatamente <code>Controle</code> ou <code>Dados</code> (atenção às maiúsculas e aos espaços). Renomeie e teste de novo; não precisa publicar outra versão.</p></details>
+  <details class="fix"><summary>O LED demora ou não muda</summary><p>O ESP32 só pergunta a cada volta do laço (15 s). Espere. Se o monitor serial mostrar outro texto em vez de ON/OFF, a URL está errada.</p></details>
+  <label class="done"><input type="checkbox" data-step="controle"> Concluí esta etapa</label>
+</section>
+
+<section class="part" id="alerta">
+  <div class="part-tag"><i style="background:#C7C7C7"></i>Etapa 7 · Desafio</div>
+  <h2>★ Desafio: alerta por e-mail</h2>
+  <p>Quando a temperatura passar de 35 °C, o próprio Apps Script manda um e-mail de alerta para os professores, com o seu nome. Para não encher a caixa de entrada, ele manda no máximo <b>um e-mail a cada 10 minutos</b>.</p>
+  <ol class="steps">
+    <li><h4>Troque o script inteiro</h4><p>No Apps Script, <b>apague tudo</b> e cole o script completo abaixo. Ele é o mesmo do Complemento 3 (<code>doPost</code> + <code>doGet</code>), com o alerta acrescentado dentro do <code>doPost</code>, no bloco marcado <i>NOVO: ALERTA POR E-MAIL</i>:</p><div class="ps"><div class="bar">Código.gs completo (Apps Script)<button class="copy" data-copy="function doPost(e) {&#10;  var ss = SpreadsheetApp.getActiveSpreadsheet();&#10;  var sheet = ss.getSheetByName(&quot;Dados&quot;);          // aba das leituras&#10;  var data = JSON.parse(e.postData.contents);&#10;  var agora = new Date();&#10;  sheet.appendRow([agora, data.sensor, data.valor]);&#10;&#10;  // ---- NOVO: ALERTA POR E-MAIL ----&#10;  var DESTINOS = &quot;alessandrohoras@umc.br, oscarevangelista@umc.br&quot;;&#10;  var ALUNO = &quot;COLOQUE AQUI SEU NOME E TURMA&quot;;&#10;  if (data.sensor == &quot;Temperatura&quot; &amp;&amp; data.valor &gt; 35) {&#10;    var memoria = PropertiesService.getScriptProperties();&#10;    var ultimo = Number(memoria.getProperty(&quot;ultimoAlerta&quot;) || 0);&#10;    var dezMinutos = 10 * 60 * 1000;&#10;    if (Date.now() - ultimo &gt; dezMinutos) {        // no máximo 1 e-mail a cada 10 min&#10;      MailApp.sendEmail(&#10;        DESTINOS,                                  // para os professores&#10;        &quot;Alerta IoT (&quot; + ALUNO + &quot;): temperatura alta&quot;,&#10;        &quot;Aluno(a): &quot; + ALUNO + &quot;\nA temperatura chegou a &quot; + data.valor + &quot; °C em &quot; + agora&#10;      );&#10;      memoria.setProperty(&quot;ultimoAlerta&quot;, String(Date.now()));&#10;    }&#10;  }&#10;&#10;  return ContentService&#10;    .createTextOutput(&quot;OK&quot;)&#10;    .setMimeType(ContentService.MimeType.TEXT);&#10;}&#10;&#10;// NOVO: o ESP32 pergunta &quot;qual o comando?&quot; e a planilha responde&#10;function doGet(e) {&#10;  var ss = SpreadsheetApp.getActiveSpreadsheet();&#10;  var controle = ss.getSheetByName(&quot;Controle&quot;);    // aba do controle&#10;  var comando = String(controle.getRange(&quot;B1&quot;).getValue()).trim().toUpperCase();&#10;  return ContentService&#10;    .createTextOutput(comando)                     // responde &quot;ON&quot; ou &quot;OFF&quot;&#10;    .setMimeType(ContentService.MimeType.TEXT);&#10;}">Copiar</button></div>
+<pre>function doPost(e) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName("Dados");          // aba das leituras
+  var data = JSON.parse(e.postData.contents);
+  var agora = new Date();
+  sheet.appendRow([agora, data.sensor, data.valor]);
+
+  // ---- NOVO: ALERTA POR E-MAIL ----
+  var DESTINOS = "alessandrohoras@umc.br, oscarevangelista@umc.br";
+  var ALUNO = "COLOQUE AQUI SEU NOME E TURMA";
+  if (data.sensor == "Temperatura" &amp;&amp; data.valor &gt; 35) {
+    var memoria = PropertiesService.getScriptProperties();
+    var ultimo = Number(memoria.getProperty("ultimoAlerta") || 0);
+    var dezMinutos = 10 * 60 * 1000;
+    if (Date.now() - ultimo &gt; dezMinutos) {        // no máximo 1 e-mail a cada 10 min
+      MailApp.sendEmail(
+        DESTINOS,                                  // para os professores
+        "Alerta IoT (" + ALUNO + "): temperatura alta",
+        "Aluno(a): " + ALUNO + "\nA temperatura chegou a " + data.valor + " °C em " + agora
+      );
+      memoria.setProperty("ultimoAlerta", String(Date.now()));
+    }
+  }
+
+  return ContentService
+    .createTextOutput("OK")
+    .setMimeType(ContentService.MimeType.TEXT);
+}
+
+// NOVO: o ESP32 pergunta "qual o comando?" e a planilha responde
+function doGet(e) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var controle = ss.getSheetByName("Controle");    // aba do controle
+  var comando = String(controle.getRange("B1").getValue()).trim().toUpperCase();
+  return ContentService
+    .createTextOutput(comando)                     // responde "ON" ou "OFF"
+    .setMimeType(ContentService.MimeType.TEXT);
+}</pre></div>
+      <details class="entenda"><summary>📖 Entenda o código (linha por linha)</summary><div class="wrap"><table class="tab"><tr><th>Trecho</th><th>O que faz</th></tr><tr><td><code>var DESTINOS = &quot;...@umc.br, ...@umc.br&quot;;</code></td><td>Para quem o e-mail vai. Vários endereços são separados por vírgula.</td></tr><tr><td><code>var ALUNO = &quot;COLOQUE AQUI SEU NOME E TURMA&quot;;</code></td><td>Seu nome e turma, que aparecem no assunto e no texto, para os professores saberem de quem é o alerta. <b>Troque antes de publicar.</b></td></tr><tr><td><code>if (data.sensor == &quot;Temperatura&quot; &amp;&amp; data.valor &gt; 35)</code></td><td>Só entra se a leitura for de temperatura <b>e</b> (<code>&amp;&amp;</code>) o valor passar de 35.</td></tr><tr><td><code>PropertiesService.getScriptProperties()</code></td><td>Uma “memória” do script, que continua guardada entre uma execução e outra.</td></tr><tr><td><code>Number(memoria.getProperty(&quot;ultimoAlerta&quot;) || 0)</code></td><td>Lê a hora do último e-mail. Se ainda não existe (primeira vez), usa 0. O <code>||</code> aqui quer dizer “se não tiver, use 0”.</td></tr><tr><td><code>10 * 60 * 1000</code></td><td>Dez minutos em milissegundos: 10 min × 60 s × 1000 ms.</td></tr><tr><td><code>if (Date.now() - ultimo &gt; dezMinutos)</code></td><td>Agora menos a hora do último e-mail: se passou de 10 minutos, pode mandar outro.</td></tr><tr><td><code>MailApp.sendEmail(destino, assunto, texto)</code></td><td>Envia o e-mail pela sua conta Google. O <code>\n</code> no texto é uma quebra de linha.</td></tr><tr><td><code>memoria.setProperty(&quot;ultimoAlerta&quot;, ...)</code></td><td>Anota a hora deste e-mail, para o próximo só sair depois de 10 minutos.</td></tr></table></div></details>
+      <div class="note warn"><b class="k">Antes de salvar: coloque seu nome</b><p>Na linha <code>var ALUNO = ...</code>, troque <b>COLOQUE AQUI SEU NOME E TURMA</b> pelo seu nome e turma, por exemplo <code>&quot;Ana Souza - 3A&quot;</code>. Mantenha as aspas.</p></div>
+      <div class="note tip"><b class="k">Para quem vai o e-mail</b><p>O alerta vai para os professores (<b>alessandrohoras@umc.br</b> e <b>oscarevangelista@umc.br</b>). Para receber uma cópia, acrescente o seu e-mail no fim da lista do <code>DESTINOS</code>, separado por vírgula.</p></div></li>
+    <li><h4>Autorize o envio de e-mail</h4><p>Como o script agora manda e-mail, o Google pede uma permissão nova. Salve (💾), escolha <b>doGet</b> na lista de funções ao lado do botão <b>Executar</b> e clique em <b>Executar</b>. Aparece <b>Autorizar acesso</b>: siga as mesmas telas da Etapa 2 (Avançado → Acessar → Permitir).</p>
+      <p>Rodar o <code>doGet</code> pelo editor serve só para disparar a autorização; ele funciona sem o pedido de fora.</p></li>
+    <li><h4>Publique uma nova versão</h4><p><b>Implantar</b> → <b>Gerenciar implantações</b> → ✏️ → <b>Nova versão</b> → <b>Implantar</b>.</p></li>
+    <li><h4>Teste</h4><p>No Wokwi, coloque o DHT22 em <b>36 °C</b>.</p>
+      <div class="note ok"><b class="k">Confira</b><p>Em <b>Execuções</b>, no menu da esquerda do Apps Script, a chamada do <code>doPost</code> aparece com a versão nova e status <b>Concluído</b>. O e-mail “Alerta IoT (seu nome): temperatura alta” é enviado aos professores (e a você, se acrescentou seu e-mail). Se a temperatura continuar alta, o próximo só sai depois de 10 minutos.</p></div>
+      <div class="note warn"><b class="k">Apareceu “Falha” em Execuções?</b><p>Abra <b>Execuções</b> e clique na linha em vermelho. Se a mensagem for <i>“Você não tem permissão para chamar MailApp.sendEmail”</i>, falta autorizar o e-mail (passo 2) ou publicar a <b>Nova versão</b> (passo 3), nessa ordem.</p></div></li>
+  </ol>
+  <div class="challenge"><h4>Vá além</h4><p>Mude o alerta para disparar também quando a <b>umidade</b> ficar abaixo de 30. Dica: <code>||</code> quer dizer “ou”.</p></div>
+  <label class="done"><input type="checkbox" data-step="alerta"> Concluí o desafio</label>
+</section>
+
+<section class="part">
+  <h2>Limites e boas práticas</h2>
+  <ul>
+    <li>O Google limita quantas vezes por dia um script pode rodar e enviar e-mails. Para estudo, não chega perto, mas evite intervalos menores que 10 segundos.</li>
+    <li>Uma planilha aguenta muitas linhas, mas fica lenta com centenas de milhares. Para projetos que rodam 24 horas por dia, o caminho é um banco de dados, como na aula da estação meteorológica.</li>
+    <li>A URL do Web App funciona como uma senha. Se ela vazar, faça uma <b>Nova implantação</b> (gera outra URL) e arquive a antiga em Gerenciar implantações.</li>
+  </ul>
+  <p>Documentação: <a href="https://developers.google.com/apps-script/guides/web" target="_blank" rel="noopener">Web Apps no Apps Script</a> · <a href="https://docs.wokwi.com/guides/esp32-wifi" target="_blank" rel="noopener">Wi-Fi no Wokwi</a> (em inglês).</p>
+</section>
+</main>
+<footer>Aula-atividade: IoT + Google Planilhas.</footer>
+
+<script>
+(function(){
+  var STEPS = [
+    {id:"visao",    label:"Visão geral", color:"#A6BBCF", icon:"?"},
+    {id:"planilha", label:"Planilha",    color:"#C8E6C9", icon:"1"},
+    {id:"script",   label:"Apps Script", color:"#FDD0A2", icon:"2"},
+    {id:"wokwi",    label:"Wokwi",       color:"#D8BFD8", icon:"3"},
+    {id:"sensor",   label:"+ Sensor",    color:"#9DD5E8", icon:"4"},
+    {id:"resumo",   label:"+ Resumo",    color:"#9DD5E8", icon:"5"},
+    {id:"controle", label:"+ Controle",  color:"#9DD5E8", icon:"6"},
+    {id:"alerta",   label:"Desafio",     color:"#C7C7C7", icon:"★"}
+  ];
+  var KEY = "iot-planilha-progresso";
+  var NS = "http://www.w3.org/2000/svg";
+  var svg = document.getElementById("flowSvg");
+  var W = 150, H = 40, STEP_X = 172;
+
+  function el(tag, attrs, parent){
+    var e = document.createElementNS(NS, tag);
+    for (var k in attrs) e.setAttribute(k, attrs[k]);
+    if (parent) parent.appendChild(e);
+    return e;
+  }
+  function pos(i){ return {x: 20 + i*STEP_X, y: (i % 2 === 0) ? 28 : 98}; }
+
+  // fios primeiro (ficam atrás dos nós)
+  for (var i = 0; i < STEPS.length - 1; i++){
+    var a = pos(i), b = pos(i+1);
+    var x1 = a.x + W, y1 = a.y + H/2, x2 = b.x, y2 = b.y + H/2;
+    el("path", {d:"M"+x1+" "+y1+" C"+(x1+45)+" "+y1+", "+(x2-45)+" "+y2+", "+x2+" "+y2,
+      fill:"none", stroke:"#888", "stroke-width":"3"}, svg);
+  }
+
+  STEPS.forEach(function(s, i){
+    var p = pos(i);
+    var a = el("a", {href:"#"+s.id, class:"fn-node", "aria-label":s.label}, svg);
+    el("rect", {class:"body", x:p.x, y:p.y, width:W, height:H, rx:5, fill:s.color}, a);
+    el("path", {d:"M"+(p.x+5)+" "+p.y+" h21 v"+H+" h-21 a5 5 0 0 1 -5 -5 v-"+(H-10)+" a5 5 0 0 1 5 -5 z", fill:"rgba(0,0,0,.07)"}, a);
+    el("line", {x1:p.x+26, y1:p.y, x2:p.x+26, y2:p.y+H, stroke:"rgba(0,0,0,.12)"}, a);
+    var ic = el("text", {x:p.x+13, y:p.y+25, "text-anchor":"middle", style:"font-weight:700"}, a);
+    ic.textContent = s.icon;
+    var t = el("text", {x:p.x+36, y:p.y+25}, a);
+    t.textContent = s.label;
+    if (i > 0) el("rect", {x:p.x-5, y:p.y+15, width:10, height:10, rx:3, fill:"#d9d9d9", stroke:"#999"}, a);
+    if (i < STEPS.length-1) el("rect", {x:p.x+W-5, y:p.y+15, width:10, height:10, rx:3, fill:"#d9d9d9", stroke:"#999"}, a);
+    var st = el("g", {class:"fn-status", id:"st-"+s.id}, svg);
+    el("rect", {x:p.x+4, y:p.y+H+8, width:9, height:9, rx:2, fill:"#3E8E41"}, st);
+    var stt = el("text", {x:p.x+18, y:p.y+H+17, style:"font-size:13px;fill:#3E8E41"}, st);
+    stt.textContent = "concluído";
+  });
+
+  // progresso salvo no navegador
+  function load(){ try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch(e){ return {}; } }
+  function save(d){ try { localStorage.setItem(KEY, JSON.stringify(d)); } catch(e){} }
+  var data = load();
+
+  function render(){
+    var n = 0;
+    STEPS.forEach(function(s){
+      var on = !!data[s.id]; if (on) n++;
+      var g = document.getElementById("st-"+s.id); if (g) g.classList.toggle("on", on);
+    });
+    document.getElementById("progText").textContent = n + " de " + STEPS.length + " etapas";
+    document.getElementById("progBar").style.width = (n / STEPS.length * 100) + "%";
+  }
+  document.querySelectorAll("label.done input").forEach(function(cb){
+    cb.checked = !!data[cb.dataset.step];
+    cb.addEventListener("change", function(){ data[cb.dataset.step] = cb.checked; save(data); render(); });
+  });
+  render();
+
+  // botões de copiar
+  function copyText(text, btn){
+    var done = function(){
+      var old = btn.textContent; btn.textContent = "Copiado!"; btn.classList.add("done");
+      setTimeout(function(){ btn.textContent = old; btn.classList.remove("done"); }, 1600);
+    };
+    if (navigator.clipboard && window.isSecureContext){
+      navigator.clipboard.writeText(text).then(done, function(){ fallback(text); done(); });
+    } else { fallback(text); done(); }
+  }
+  function fallback(text){
+    var ta = document.createElement("textarea");
+    ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand("copy"); } catch(e){}
+    document.body.removeChild(ta);
+  }
+  document.querySelectorAll(".copy").forEach(function(btn){
+    btn.addEventListener("click", function(){
+      var text = btn.dataset.copyFrom
+        ? document.getElementById(btn.dataset.copyFrom).textContent
+        : btn.dataset.copy;
+      copyText(text, btn);
+    });
+  });
+})();
+
+
+// ---------- personalização com a URL do Web App ----------
+(function(){
+  var TOKEN = "COLE_AQUI_A_URL_DO_WEB_APP", UK = "iot-planilha-url";
+  var alvos = [];
+  document.querySelectorAll("pre").forEach(function(el){ if (el.innerHTML.indexOf(TOKEN) >= 0) alvos.push({el:el, tipo:"html", orig:el.innerHTML}); });
+  document.querySelectorAll("[data-copy]").forEach(function(el){ if (el.dataset.copy.indexOf(TOKEN) >= 0) alvos.push({el:el, tipo:"copy", orig:el.dataset.copy}); });
+  var input = document.getElementById("weburl"), st = document.getElementById("urlStatus");
+  function valida(v){ return /^https:\/\/script\.google\.com\/macros\/s\/[A-Za-z0-9_-]{20,}\/exec$/.test(v); }
+  function aplicar(v){
+    var ok = valida(v), u = ok ? v : TOKEN;
+    alvos.forEach(function(a){
+      var novo = a.orig.split(TOKEN).join(u);
+      if (a.tipo === "html") a.el.innerHTML = novo; else a.el.dataset.copy = novo;
+    });
+    if (!v) st.textContent = "⚠️ Ainda sem URL: os códigos mostram COLE_AQUI_A_URL_DO_WEB_APP.";
+    else if (ok) st.textContent = "✅ URL válida. Todos os códigos desta página já estão com ela.";
+    else st.textContent = "❌ Essa URL não parece a do Web App. Ela começa com https://script.google.com/macros/s/ e termina com /exec.";
+  }
+  var salvo = ""; try { salvo = localStorage.getItem(UK) || ""; } catch(e){}
+  input.value = salvo; aplicar(salvo);
+  input.addEventListener("input", function(){
+    var v = input.value.trim();
+    try { localStorage.setItem(UK, v); } catch(e){}
+    aplicar(v);
+  });
+})();
+</script>
+</body>
+</html>
